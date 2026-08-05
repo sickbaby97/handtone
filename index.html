@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HANDTONE</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#080c14;color:#dde4f0;font-family:'Inter',-apple-system,sans-serif;overflow:hidden;height:100vh}
+  #app{display:flex;height:100vh}
+  #cam-panel{flex:1;position:relative;background:#000;display:flex;align-items:center;justify-content:center}
+  #main-canvas{display:block;max-width:100%;max-height:100%}
+  video{display:none}
+  #no-hands{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);color:#445;font-size:12px;opacity:0;transition:opacity.4s;pointer-events:none}
+  #no-hands.on{opacity:1}
+
+  #side{width:210px;background:#111827;display:flex;flex-direction:column;font-size:12px;flex-shrink:0}
+  .card{padding:14px;border-bottom:1px solid #1e293b}
+  .card-t{color:#64748b;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px}
+  .row{display:flex;justify-content:space-between;padding:3px 0}
+  .k{color:#64748b;font-size:10px}.v{color:#e2e8f0;font-size:13px;font-weight:600}.v.hl{color:#06b6d4}
+  .hr{height:1px;background:#1e293b;margin:8px 0}
+
+  .fx-btn{display:block;width:100%;text-align:left;background:0;border:1px solid transparent;border-radius:6px;color:#94a3b8;padding:6px 10px;cursor:pointer;font-size:11px;font-family:inherit;transition:all.15s}
+  .fx-btn:hover{color:#e2e8f0;background:rgba(255,255,255,.04)}
+  .fx-btn.sel{color:#6366f1;background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.25)}
+
+  .scale-btn{display:inline-block;background:0;border:1px solid #1e293b;border-radius:4px;color:#64748b;padding:3px 8px;cursor:pointer;font-size:10px;font-family:inherit;margin:2px;transition:all.15s}
+  .scale-btn:hover{color:#e2e8f0;border-color:#334155}
+  .scale-btn.sel{color:#06b6d4;border-color:#06b6d4;background:rgba(6,182,212,.08)}
+
+  .guide{color:#64748b;font-size:10px;line-height:1.8}.guide b{color:#cbd5e1}
+  #ft{margin-top:auto;padding:10px 14px;color:#475569;font-size:9px;display:flex;justify-content:space-between;border-top:1px solid #1e293b}
+
+  #start-overlay{position:absolute;inset:0;background:rgba(8,12,20,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;gap:24px}
+  #hero{font-size:56px;font-weight:800;letter-spacing:.1em;background:linear-gradient(135deg,#6366f1,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 24px rgba(99,102,241,.35))}
+  #hero-sub{color:#64748b;font-size:11px;letter-spacing:.18em;text-transform:uppercase;margin-top:-16px}
+  #hero-desc{color:#64748b;font-size:12px;text-align:center;line-height:2.1}
+  #hero-desc em{font-style:normal;color:#06b6d4;font-weight:600}
+  #start-btn{background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);color:#818cf8;padding:12px 44px;border-radius:40px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;letter-spacing:.08em;text-transform:uppercase;transition:all.3s}
+  #start-btn:hover{border-color:#6366f1;box-shadow:0 0 24px rgba(99,102,241,.2);background:rgba(99,102,241,.15)}
+
+  #loading-overlay{position:absolute;inset:0;background:rgba(8,12,20,.95);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:25;gap:14px}
+  .ld{width:22px;height:22px;border:2px solid #1e293b;border-top-color:#6366f1;border-radius:50%;animation:spin.7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  #lang-btn{position:fixed;top:14px;right:14px;z-index:30;background:rgba(17,24,39,.85);border:1px solid #1e293b;border-radius:20px;color:#94a3b8;padding:5px 14px;cursor:pointer;font-size:11px;font-family:inherit;transition:all.2s}
+  #lang-btn:hover{border-color:#6366f1;color:#e2e8f0}
+
+  #swipe-indicator{position:absolute;right:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;z-index:10;pointer-events:none;opacity:0;transition:opacity.3s}
+  #swipe-indicator.on{opacity:1}
+  #swipe-indicator .arrow{color:#6366f1;font-size:18px;font-weight:700;text-shadow:0 0 8px rgba(99,102,241,.4);transition:transform.15s}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="cam-panel">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="main-canvas"></canvas>
+    <div id="no-hands">place hands in frame</div>
+
+    <div id="start-overlay">
+      <div id="hero">HANDTONE</div>
+      <div id="hero-sub">Gesture-driven sound</div>
+      <div id="hero-desc"></div>
+      <button id="start-btn">LAUNCH</button>
+    </div>
+
+    <div id="loading-overlay">
+      <div class="ld"></div>
+      <div id="loading-msg" style="color:#e2e8f0;font-size:14px"></div>
+      <div id="loading-detail" style="color:#64748b;font-size:11px"></div>
+    </div>
+
+    <div id="swipe-indicator">
+      <div class="arrow" style="font-size:20px">✊</div>
+    </div>
+  </div>
+
+  <div id="side">
+    <div class="card">
+      <div class="card-t" id="lbl-status">STATUS</div>
+      <div class="row"><span class="k" id="lbl-chord">CHORD</span><span class="v hl" id="v-chord">--</span></div>
+      <div class="row"><span class="k" id="lbl-vol">VOL</span><span class="v" id="v-vol">--%</span></div>
+      <div class="hr"></div>
+      <div class="row"><span class="k" id="lbl-fx">EFFECT</span><span class="v hl" id="v-fx">Clean</span></div>
+      <div class="row"><span class="k" id="lbl-notes">NOTES</span><span class="v" id="v-notes" style="font-size:10px">--</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-t" id="lbl-scales">SCALES</div>
+      <div id="scales"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-t" id="lbl-effects">EFFECTS</div>
+      <button class="fx-btn sel" data-effect="clean">Clean</button>
+      <button class="fx-btn" data-effect="distortion">Distortion</button>
+      <button class="fx-btn" data-effect="reverb">Reverb</button>
+      <button class="fx-btn" data-effect="delay">Delay</button>
+      <button class="fx-btn" data-effect="bitcrusher">Bitcrusher</button>
+      <button class="fx-btn" data-effect="chorus">Chorus</button>
+    </div>
+
+    <div class="card">
+      <div class="card-t" id="lbl-guide">GUIDE</div>
+      <div class="guide" id="guide-text"></div>
+    </div>
+
+    <div id="ft"><span>HANDTONE v2</span><span>10-finger polyphony</span></div>
+  </div>
+</div>
+
+<button id="lang-btn">中文</button>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
+
+<script>
+// ===== I18N =====
+const T={
+  zh:{
+    heroSub:'手势驱动声音',
+    heroDesc:'<em>右手</em> = 高音部<br><em>左手</em> = 低音部<br><em>右手握拳再张开</em> = 切换效果<br><em>高度</em> = 音量',
+    startBtn:'启 动',labelStatus:'状态',labelChord:'和弦',labelVol:'音量',labelFx:'效果',labelNotes:'音名',
+    labelScales:'调式',labelEffects:'效果器',labelGuide:'操作',
+    ldCam:'启动摄像头',ldModel:'加载手部模型',ldDetail:'首次约5MB下载',fail:'启动失败',
+    guide:'<b>右手</b> = 高音部<br><b>左手</b> = 低音部<br><b>右手握拳再张开</b> → 切效果<br><b>高度</b> → 音量',
+    fx:['原声','失真','混响','延迟','降位','合唱'],
+    scales:['五声','大调','小调','布鲁斯','半音'],
+  },
+  en:{
+    heroSub:'Gesture-driven sound',
+    heroDesc:'<em>R-HAND</em> = melody (high)<br><em>L-HAND</em> = bass (low)<br><em>Fist then open R-hand</em> = switch FX<br><em>Height</em> = volume',
+    startBtn:'LAUNCH',labelStatus:'STATUS',labelChord:'CHORD',labelVol:'VOLUME',labelFx:'EFFECT',labelNotes:'NOTES',
+    labelScales:'SCALES',labelEffects:'EFFECTS',labelGuide:'GUIDE',
+    ldCam:'Starting camera',ldModel:'Loading model',ldDetail:'~5MB first download',fail:'START FAILED',
+    guide:'<b>R-HAND</b> = melody (high)<br><b>L-HAND</b> = bass (low)<br><b>Fist then open R-hand</b> → switch FX<br><b>Height</b> → volume',
+    fx:['Clean','Distortion','Reverb','Delay','Bitcrusher','Chorus'],
+    scales:['Pentatonic','Major','Minor','Blues','Chromatic'],
+  }
+};
+let lang='zh';const _=k=>T[lang][k]||k;
+
+// Scales
+const SCALES=[
+  {name:'pentatonic',notes:[0,2,4,7,9]},       // C D E G A
+  {name:'major',    notes:[0,2,4,5,7,9,11]},    // C D E F G A B
+  {name:'minor',    notes:[0,2,3,5,7,8,10]},    // C D Eb F G Ab Bb
+  {name:'blues',    notes:[0,3,5,6,7,10]},      // C Eb F F# G Bb
+  {name:'chromatic',notes:[0,1,2,3,4,5,6,7,8,9,10,11]},
+];
+let currentScale=0;
+const BASE_FREQ=261.63; // C4
+
+function getFreq(index){
+  const s=SCALES[currentScale];
+  const len=s.notes.length;
+  const oct=Math.floor(index/len);
+  const note=s.notes[index%len];
+  return BASE_FREQ*Math.pow(2,(note+oct*12)/12);
+}
+
+const FX_LIST=['clean','distortion','reverb','delay','bitcrusher','chorus'];
+let currentEffect='clean';
+
+function setLang(l){
+  lang=l;
+  document.getElementById('lang-btn').textContent=l==='zh'?'EN':'中文';
+  document.getElementById('hero-sub').textContent=_('heroSub');
+  document.getElementById('hero-desc').innerHTML=_('heroDesc');
+  document.getElementById('start-btn').textContent=_('startBtn');
+  ['status','chord','vol','fx','notes','scales','effects','guide'].forEach(k=>document.getElementById('lbl-'+k).textContent=_(k==='vol'?'labelVol':'label'+k[0].toUpperCase()+k.slice(1)));
+  document.getElementById('guide-text').innerHTML=_('guide');
+  updateFxUI();updateScaleUI();
+}
+document.getElementById('lang-btn').addEventListener('click',()=>setLang(lang==='zh'?'en':'zh'));
+
+// ===== DOM =====
+const video=document.getElementById('video'),canvas=document.getElementById('main-canvas'),ctx=canvas.getContext('2d');
+const startOverlay=document.getElementById('start-overlay'),startBtn=document.getElementById('start-btn');
+const loadingOverlay=document.getElementById('loading-overlay'),loadingMsg=document.getElementById('loading-msg'),loadingDetail=document.getElementById('loading-detail');
+const noHandsEl=document.getElementById('no-hands'),swipeIndicator=document.getElementById('swipe-indicator');
+const vChord=document.getElementById('v-chord'),vVol=document.getElementById('v-vol'),vFx=document.getElementById('v-fx'),vNotes=document.getElementById('v-notes');
+const fxBtns=document.querySelectorAll('.fx-btn'),scalesDiv=document.getElementById('scales');
+
+function showLoading(m,d){loadingOverlay.style.display='flex';loadingMsg.textContent=m;loadingDetail.textContent=d||''}
+function hideLoading(){loadingOverlay.style.display='none'}
+
+// ===== STATE =====
+let isRunning=false,animationId=null;
+let handDataR=null,handDataL=null;
+let trailPositions=[];
+const TRAIL_LENGTH=3;
+let currentVolume=0,targetVolume=0;
+
+// ===== AUDIO =====
+let audioCtx,masterGain,effectNodes,oscillators=[];
+function initAudio(){
+  if(!audioCtx)return;
+  if(masterGain)return;
+  audioCtx.resume();
+  masterGain=audioCtx.createGain();masterGain.gain.value=0;
+  const dist=audioCtx.createWaveShaper();dist.oversample='4x';
+  const c=new Float32Array(44100);for(let i=0;i<44100;i++){const x=i*2/44100-1;c[i]=((Math.PI+400)*x)/(Math.PI+400*Math.abs(x));}
+  dist.curve=c;
+  const conv=audioCtx.createConvolver(),len=audioCtx.sampleRate*1.5,imp=audioCtx.createBuffer(2,len,audioCtx.sampleRate);
+  for(let ch=0;ch<2;ch++){const d=imp.getChannelData(ch);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2)}
+  conv.buffer=imp;
+  const dly=audioCtx.createDelay(1);dly.delayTime.value=0.35;
+  const fb=audioCtx.createGain();fb.gain.value=0.45;dly.connect(fb);fb.connect(dly);
+  const bc=audioCtx.createScriptProcessor(256,1,1);let ph=0;
+  bc.onaudioprocess=e=>{const i=e.inputBuffer.getChannelData(0),o=e.outputBuffer.getChannelData(0);const b=6,s=Math.pow(2,b),f=4;for(let j=0;j<i.length;j++){ph++;o[j]=ph%f===0?Math.round(i[j]*s)/s:(o[j-1]||0)}};
+  const cd=audioCtx.createDelay(0.03);cd.delayTime.value=0.02;
+  const co=audioCtx.createOscillator(),cg=audioCtx.createGain();co.frequency.value=0.5;cg.gain.value=0.005;co.connect(cg);cg.connect(cd.delayTime);co.start();
+  effectNodes={dist,conv,dly,fb,bc,cd};
+  effectNodes.dry=audioCtx.createGain();effectNodes.dry.gain.value=1;
+  effectNodes.wet=audioCtx.createGain();effectNodes.wet.gain.value=0;
+  effectNodes.dry.connect(masterGain);masterGain.connect(audioCtx.destination);
+}
+function updateAudioChain(){
+  effectNodes.wet.disconnect();
+  [effectNodes.dist,effectNodes.conv,effectNodes.dly,effectNodes.bc,effectNodes.cd].forEach(n=>{try{n.disconnect()}catch(e){}});
+  if(currentEffect==='clean'){effectNodes.dry.gain.value=1;effectNodes.wet.gain.value=0;return}
+  effectNodes.dry.gain.value=0.3;effectNodes.wet.gain.value=0.7;
+  const m={distortion:effectNodes.dist,reverb:effectNodes.conv,delay:effectNodes.dly,bitcrusher:effectNodes.bc,chorus:effectNodes.cd};
+  effectNodes.wet.connect(m[currentEffect]);m[currentEffect].connect(masterGain);
+}
+function updateOscillators(rCount,lCount){
+  const total=rCount+lCount;
+  while(oscillators.length>total){const o=oscillators.pop();try{o.gain.disconnect();o.osc.stop()}catch(e){}}
+  // Right hand: higher octave (C5+), Left hand: lower octave (C3+)
+  let idx=0;
+  // Right hand notes first (higher octave, sine for softer tone)
+  for(let i=0;i<rCount;i++){
+    const freq=getFreq(i)*2;
+    if(idx<oscillators.length){
+      oscillators[idx].osc.frequency.value=freq;
+      oscillators[idx].osc.type='sine';
+    }else{
+      const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
+      osc.type='sine';osc.frequency.value=freq;gain.gain.value=0.07;
+      osc.connect(gain);gain.connect(effectNodes.dry);gain.connect(effectNodes.wet);
+      osc.start();oscillators.push({osc,gain});
+    }
+    idx++;
+  }
+  // Left hand notes (lower octave, triangle for warmth)
+  for(let i=0;i<lCount;i++){
+    const freq=getFreq(i)/2;
+    if(idx<oscillators.length){
+      oscillators[idx].osc.frequency.value=freq;
+      oscillators[idx].osc.type='triangle';
+    }else{
+      const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
+      osc.type='triangle';osc.frequency.value=freq;gain.gain.value=0.09;
+      osc.connect(gain);gain.connect(effectNodes.dry);gain.connect(effectNodes.wet);
+      osc.start();oscillators.push({osc,gain});
+    }
+    idx++;
+  }
+}
+function switchEffect(name){
+  if(name===currentEffect)return;
+  currentEffect=name;updateFxUI();updateAudioChain();
+}
+function updateFxUI(){
+  vFx.textContent=_('fx')[FX_LIST.indexOf(currentEffect)];
+  fxBtns.forEach(b=>b.classList.toggle('sel',b.dataset.effect===currentEffect));
+}
+function updateScaleUI(){
+  scalesDiv.innerHTML='';
+  const ns=_('scales');
+  SCALES.forEach((s,i)=>{
+    const btn=document.createElement('button');
+    btn.className='scale-btn'+(i===currentScale?' sel':'');
+    btn.textContent=ns[i];
+    btn.addEventListener('click',()=>{currentScale=i;updateScaleUI();if(isRunning)updateOscillators(0,0)});
+    scalesDiv.appendChild(btn);
+  });
+}
+
+// ===== TAP-TO-SWITCH (fist-then-open gesture) =====
+let lastRCount=-1,rClosedTime=0;
+const TAP_TIMEOUT=400; // ms to complete open-close-open
+
+function detectTap(rCount){
+  const now=Date.now();
+  // Detect: fingers went to 0 (closed fist)
+  if(rCount===0&&lastRCount>0){
+    rClosedTime=now;
+  }
+  // Detect: fingers came back (opened hand) within timeout after closing
+  if(rCount>0&&rClosedTime>0&&(now-rClosedTime)<TAP_TIMEOUT){
+    rClosedTime=0;
+    return true;
+  }
+  // Reset if closed too long
+  if(rCount===0&&rClosedTime>0&&(now-rClosedTime)>TAP_TIMEOUT){
+    rClosedTime=0;
+  }
+  lastRCount=rCount;
+  return false;
+}
+
+// ===== VISUAL EFFECTS =====
+// Get hand bounding boxes (with padding) so VFX only apply to hands
+function getHandBounds(lm,w,h){
+  let minX=1,maxX=0,minY=1,maxY=0;
+  for(const p of lm){minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y)}
+  const pad=0.04;
+  return {
+    x:Math.floor((1-maxX-pad)*w),y:Math.floor((minY-pad)*h),
+    x2:Math.ceil((1-minX+pad)*w),y2:Math.ceil((maxY+pad)*h)
+  };
+}
+
+function applyVfx(d,w,h,fx,handR,handL){
+  function inHands(x,y){
+    for(const hand of [handR,handL]){
+      if(!hand)continue;
+      const b=getHandBounds(hand,w,h);
+      if(x>=b.x&&x<=b.x2&&y>=b.y&&y<=b.y2)return true;
+    }
+    return false;
+  }
+
+  if(fx==='distortion'){
+    const s=10;
+    for(let y=0;y<h;y+=s)for(let x=0;x<w;x+=s){
+      if(!inHands(x,y))continue;
+      const i=(y*w+x)*4,p=d[i],q=d[i+1],r=d[i+2];
+      for(let dy=0;dy<s&&y+dy<h;dy++)for(let dx=0;dx<s&&x+dx<w;dx++){
+        const j=((y+dy)*w+(x+dx))*4;d[j]=p;d[j+1]=q;d[j+2]=r;
+      }
+    }
+  }else if(fx==='reverb'){
+    const rad=2,c=new Uint8ClampedArray(d);
+    for(let y=rad;y<h-rad;y++)for(let x=rad;x<w-rad;x++){
+      if(!inHands(x,y))continue;
+      let rs=0,gs=0,bs=0,n=0;
+      for(let dy=-rad;dy<=rad;dy++)for(let dx=-rad;dx<=rad;dx++){
+        const j=((y+dy)*w+(x+dx))*4;rs+=c[j];gs+=c[j+1];bs+=c[j+2];n++;
+      }
+      const i=(y*w+x)*4;d[i]=rs/n;d[i+1]=gs/n;d[i+2]=bs/n;
+    }
+  }else if(fx==='delay'){
+    for(let y=0;y<h;y++)for(let x=0;x<w/2;x++){
+      if(!inHands(x,y))continue;
+      const s=(y*w+x)*4,t=(y*w+(w-1-x))*4;d[t]=d[s]*.5;d[t+1]=d[s+1]*.5;d[t+2]=d[s+2]*.5;
+    }
+  }else if(fx==='bitcrusher'){
+    const p=6,l=6,st=255/(l-1);
+    for(let y=0;y<h;y+=p)for(let x=0;x<w;x+=p){
+      if(!inHands(x,y))continue;
+      const i=(y*w+x)*4,rr=Math.round(d[i]/st)*st,gg=Math.round(d[i+1]/st)*st,bb=Math.round(d[i+2]/st)*st;
+      for(let dy=0;dy<p&&y+dy<h;dy++)for(let dx=0;dx<p&&x+dx<w;dx++){
+        const j=((y+dy)*w+(x+dx))*4;d[j]=rr;d[j+1]=gg;d[j+2]=bb;
+      }
+    }
+  }else if(fx==='chorus'){
+    const t=Date.now();
+    for(let y=0;y<h;y+=2){const s=Math.sin(y*.03+t*.002)*12;
+      for(let x=0;x<w;x+=2){
+        if(!inHands(x,y))continue;
+        const i=(y*w+x)*4;d[i]=Math.min(255,Math.max(0,d[i]+s));d[i+1]=Math.min(255,Math.max(0,d[i+1]-s*.3));
+      }
+    }
+  }
+}
+
+// ===== HAND DETECTION =====
+const TIPS=[4,8,12,16,20],PIPS=[3,6,10,14,18];
+function countFingers(lm){
+  let n=0;const tt=lm[4],ti=lm[3],tm=lm[2];
+  if(Math.abs(tt.x-tm.x)>Math.abs(ti.x-tm.x)*1.1)n++;
+  for(let i=1;i<5;i++)if(lm[TIPS[i]].y<lm[PIPS[i]].y)n++;
+  return n;
+}
+function handSide(lm){return lm[0].x<lm[9].x?'right':'left';}
+
+function drawHandTrail(ctx,lm,w,h,alpha,color){
+  ctx.strokeStyle=color;ctx.globalAlpha=alpha*.4;ctx.lineWidth=1.5;
+  const conns=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20]];
+  conns.forEach(([a,b])=>{ctx.beginPath();ctx.moveTo((1-lm[a].x)*w,lm[a].y*h);ctx.lineTo((1-lm[b].x)*w,lm[b].y*h);ctx.stroke()});
+}
+
+function drawHand(ctx,lm,w,h,color,alpha){
+  alpha=alpha||1;
+  const conns=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]];
+  // Connections
+  ctx.strokeStyle=color;ctx.lineWidth=2;ctx.globalAlpha=alpha*.7;
+  conns.forEach(([a,b])=>{ctx.beginPath();ctx.moveTo((1-lm[a].x)*w,lm[a].y*h);ctx.lineTo((1-lm[b].x)*w,lm[b].y*h);ctx.stroke()});
+  // Joints - larger, glowing
+  ctx.globalAlpha=alpha;
+  lm.forEach((p,i)=>{
+    const x=(1-p.x)*w,y=p.y*h;
+    const isTip=TIPS.includes(i);
+    const isJoint=PIPS.includes(i)||[2,5,9,13,17].includes(i);
+    const r=isTip?4.5:isJoint?3:2;
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=isTip?'#fff':isJoint?'rgba(255,255,255,.7)':'rgba(255,255,255,.4)';
+    ctx.fill();
+  });
+}
+
+// ===== RENDER =====
+function resize(){
+  const p=document.getElementById('cam-panel'),mw=p.clientWidth,mh=p.clientHeight;
+  const a=video.videoWidth/video.videoHeight||4/3;
+  let w,h;if(mw/mh>a){h=mh;w=h*a}else{w=mw;h=w/a}
+  canvas.width=Math.floor(w);canvas.height=Math.floor(h);
+}
+let vfxFrame=0;
+function render(){
+  if(!isRunning){animationId=requestAnimationFrame(render);return}
+  resize();const w=canvas.width,h=canvas.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.save();ctx.translate(w,0);ctx.scale(-1,1);ctx.drawImage(video,0,0,w,h);ctx.setTransform(1,0,0,1,0,0);ctx.restore();
+
+  // VFX only every 3 frames, only on hand areas
+  if(currentEffect!=='clean'){
+    vfxFrame++;
+    if(vfxFrame%3===0){
+      const id=ctx.getImageData(0,0,w,h);
+      applyVfx(id.data,w,h,currentEffect,handDataR,handDataL);
+      ctx.putImageData(id,0,0);
+    }
+  }
+
+  let hasHand=false,rCount=0,lCount=0;
+
+  // Draw motion trails first
+  trailPositions.forEach((trail,i)=>{
+    const alpha=(i+1)/trailPositions.length*.25;
+    if(trail.r)drawHandTrail(ctx,trail.r,w,h,alpha,'rgba(129,140,248,.4)');
+    if(trail.l)drawHandTrail(ctx,trail.l,w,h,alpha,'rgba(248,113,113,.4)');
+  });
+
+  if(handDataR){hasHand=true;rCount=countFingers(handDataR);drawHand(ctx,handDataR,w,h,'#818cf8')}
+  if(handDataL){hasHand=true;lCount=countFingers(handDataL);drawHand(ctx,handDataL,w,h,'#f87171')}
+
+  if(hasHand){
+    noHandsEl.classList.remove('on');
+    swipeIndicator.classList.add('on');
+
+    // Right hand tap gesture → switch effect
+    if(handDataR&&detectTap(rCount)){
+      const idx=(FX_LIST.indexOf(currentEffect)+1)%FX_LIST.length;
+      switchEffect(FX_LIST[idx]);
+      swipeIndicator.querySelector('.arrow').style.transform='scale(1.4)';
+      setTimeout(()=>swipeIndicator.querySelector('.arrow').style.transform='',150);
+    }
+
+    // Chord
+    const total=rCount+lCount;
+    if(total>0){
+      updateOscillators(rCount,lCount);
+      targetVolume=1.0-((handDataR||handDataL)[0].y);
+      currentVolume+=(targetVolume-currentVolume)*0.15;
+      masterGain.gain.value=Math.max(0,Math.min(1,currentVolume))*.7;
+      vVol.textContent=Math.round(currentVolume*100)+'%';
+      vChord.textContent=total+' ('+rCount+'R/'+lCount+'L)';
+      const ns=[];
+      for(let i=0;i<rCount;i++)ns.push('R'+getFreq(i).toFixed(0));
+      for(let i=0;i<lCount;i++)ns.push('L'+(getFreq(i)/2).toFixed(0));
+      vNotes.textContent=ns.slice(0,6).join(' ')+(ns.length>6?'...':'');
+    }else{
+      updateOscillators(0,0);targetVolume=0;currentVolume*=0.9;
+      masterGain.gain.value=Math.max(0,currentVolume)*.7;
+      vVol.textContent='--%';vChord.textContent='0';vNotes.textContent='--';
+    }
+
+    // Volume bar (inverted for mirror)
+    const barY=(handDataR||handDataL)[0].y,vol=1.0-barY,bx=8,bh=h*.65,by=h*.175,vh=bh*vol;
+    ctx.fillStyle='rgba(0,0,0,.2)';ctx.fillRect(bx-1.5,by,3,bh);
+    const g=ctx.createLinearGradient(0,by+bh,0,by);g.addColorStop(0,'#22c55e');g.addColorStop(.5,'#f59e0b');g.addColorStop(1,'#ef4444');
+    ctx.fillStyle=g;ctx.fillRect(bx-1,by+bh-vh,2,vh);
+
+    // Update trails
+    trailPositions.push({r:handDataR?[...handDataR]:null,l:handDataL?[...handDataL]:null});
+    if(trailPositions.length>TRAIL_LENGTH)trailPositions.shift();
+  }else{
+    noHandsEl.classList.add('on');
+    swipeIndicator.classList.remove('on');
+    vChord.textContent='--';vVol.textContent='--%';vNotes.textContent='--';
+    updateOscillators(0,0);targetVolume=0;currentVolume*=0.9;
+    masterGain.gain.value=Math.max(0,currentVolume)*.7;
+    trailPositions=[];
+  }
+  animationId=requestAnimationFrame(render);
+}
+
+// ===== MEDIAPIPE =====
+function onResults(r){
+  handDataR=null;handDataL=null;
+  if(r.multiHandLandmarks)for(const lm of r.multiHandLandmarks){if(handSide(lm)==='right')handDataR=lm;else handDataL=lm}
+}
+
+async function start(){
+  if(isRunning)return;
+  if(!audioCtx){audioCtx=new(window.AudioContext||window.webkitAudioContext)();audioCtx.resume()}
+  try{
+    showLoading(_('ldCam'));
+    const s=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'}});
+    video.srcObject=s;await video.play();await new Promise(r=>setTimeout(r,300));
+    showLoading(_('ldModel'),_('ldDetail'));
+    const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${f}`});
+    hands.setOptions({maxNumHands:2,modelComplexity:1,minDetectionConfidence:.7,minTrackingConfidence:.5});
+    hands.onResults(onResults);
+    new Camera(video,{onFrame:async()=>{await hands.send({image:video})},width:640,height:480}).start();
+    initAudio();updateAudioChain();updateFxUI();updateScaleUI();
+    // Test beep
+    const to=audioCtx.createOscillator(),tg=audioCtx.createGain();to.type='sine';to.frequency.value=660;tg.gain.value=.1;
+    to.connect(tg);tg.connect(audioCtx.destination);to.start();to.stop(audioCtx.currentTime+.2);
+    hideLoading();isRunning=true;startOverlay.style.display='none';
+    resize();render();
+  }catch(e){showLoading(_('fail'),e.message);console.error(e)}
+}
+
+// ===== EVENTS =====
+startBtn.addEventListener('click',start);
+startOverlay.addEventListener('click',e=>{if(e.target===startOverlay)start()});
+fxBtns.forEach(b=>b.addEventListener('click',()=>switchEffect(b.dataset.effect)));
+document.addEventListener('keydown',e=>{const k={'1':'clean','2':'distortion','3':'reverb','4':'delay','5':'bitcrusher','6':'chorus'};if(k[e.key]&&isRunning)switchEffect(k[e.key])});
+window.addEventListener('beforeunload',()=>{oscillators.forEach(o=>{try{o.gain.disconnect();o.osc.stop()}catch(e){}});oscillators=[];if(audioCtx)audioCtx.close();cancelAnimationFrame(animationId)});
+
+setLang('zh');
+</script>
+</body>
+</html>
